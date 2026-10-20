@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// Segreti nel Keychain di login: secret key S3, password/passphrase SFTP, token SSO.
+/// Secrets in the login Keychain: S3 secret keys, SFTP passwords/passphrases, SSO tokens.
 enum Keychain {
     private static let service = "io.github.alexit84.CloudFerryLite"
 
@@ -41,13 +41,13 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
-    // Segreto principale di una connessione (account = UUID, compatibile con la versione 1).
+    // Main secret of a connection (account = connection UUID).
     static func setSecret(_ secret: String, for id: UUID) { set(secret, account: id.uuidString) }
     static func secret(for id: UUID) -> String? { get(account: id.uuidString) }
     static func deleteSecret(for id: UUID) { delete(account: id.uuidString) }
 }
 
-/// Profili letti da ~/.aws/credentials e ~/.aws/config: chiavi statiche o AWS SSO (IAM Identity Center).
+/// Profiles read from ~/.aws/credentials and ~/.aws/config: static keys or AWS SSO (IAM Identity Center).
 struct AWSProfile: Identifiable {
     var name: String
     var accessKeyID: String?

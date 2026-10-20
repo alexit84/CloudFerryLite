@@ -8,7 +8,7 @@ struct SSOError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// Codice da mostrare all'utente durante il login SSO.
+/// Code shown to the user during the SSO sign-in.
 struct SSOLoginPrompt: Identifiable {
     let id = UUID()
     var startURL: String
@@ -22,11 +22,11 @@ struct SSOAccount: Identifiable, Hashable {
     var id: String { accountId }
 }
 
-/// AWS IAM Identity Center: login con device authorization (come `aws sso login`) e credenziali temporanee del ruolo.
+/// AWS IAM Identity Center: device authorization sign-in (like `aws sso login`) and temporary role credentials.
 @Observable
 @MainActor
 final class SSOService {
-    /// Login in attesa di conferma nel browser (mostrato come sheet).
+    /// Sign-in waiting for confirmation in the browser (shown as a sheet).
     var prompt: SSOLoginPrompt?
 
     private var loginTasks: [String: Task<String, Error>] = [:]
@@ -44,11 +44,11 @@ final class SSOService {
 
     // MARK: Token
 
-    /// Access token valido per lo start URL: da cache (app o AWS CLI) o con un nuovo login interattivo.
+    /// Valid access token for the start URL: from cache (app or AWS CLI) or with a new interactive sign-in.
     func accessToken(startURL: String, region: String, interactive: Bool = true) async throws -> String {
         if let t = cachedToken(startURL: startURL) { return t }
         guard interactive else { throw SSOError(message: String(localized: "SSO session expired: sign in again")) }
-        // Più richieste contemporanee condividono lo stesso login.
+        // Concurrent requests share the same sign-in.
         if let running = loginTasks[startURL] { return try await running.value }
         let task = Task { try await self.login(startURL: startURL, region: region) }
         loginTasks[startURL] = task
@@ -74,7 +74,7 @@ final class SSOService {
         return awsCLICachedToken(startURL: startURL)
     }
 
-    /// Riusa il token salvato da `aws sso login` in ~/.aws/sso/cache, se valido.
+    /// Reuses the token saved by `aws sso login` in ~/.aws/sso/cache, if still valid.
     private func awsCLICachedToken(startURL: String) -> String? {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aws/sso/cache")
         guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return nil }
@@ -135,7 +135,7 @@ final class SSOService {
         throw SSOError(message: String(localized: "SSO sign-in timed out"))
     }
 
-    /// Registrazione del client OIDC pubblico (valida ~90 giorni, salvata nel Keychain).
+    /// Public OIDC client registration (valid ~90 days, saved in the Keychain).
     private func registration(region: String) async throws -> ClientRegistration {
         let account = "sso-client:" + region
         if let json = Keychain.get(account: account),
@@ -154,7 +154,7 @@ final class SSOService {
         return r
     }
 
-    // MARK: Portale (account, ruoli, credenziali)
+    // MARK: Portal (accounts, roles, credentials)
 
     func roleCredentials(_ conn: Connection) async throws -> AWSCredentials {
         let token = try await accessToken(startURL: conn.ssoStartURL, region: conn.ssoRegion)
@@ -203,7 +203,7 @@ final class SSOService {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         let body = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
         if status == 401 {
-            // Token revocato o scaduto lato server: dimenticalo così il prossimo tentativo rifà il login.
+            // Token revoked or expired server-side: forget it so the next attempt signs in again.
             logout(startURL: startURL)
             throw SSOError(message: String(localized: "SSO session no longer valid: try again to sign in"))
         }

@@ -1,5 +1,5 @@
-/* Traduzione italiana di CloudFerryLite. Chiavi = stringhe inglesi del codice sorgente.
-   Verifica la copertura con scripts/check-localizations.sh */
+/* Italian translation of CloudFerryLite. Keys are the English strings in the source code.
+   Check coverage with scripts/check-localizations.sh */
 
 "\"%@\" already exists at the destination" = "Esiste già \"%@\" nella destinazione";
 "\"%@\" already exists. Replace it?" = "\"%@\" esiste già. Sostituirlo?";

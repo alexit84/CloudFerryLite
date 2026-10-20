@@ -1,14 +1,14 @@
 import Foundation
 import Observation
 
-/// Stato persistente: connessioni e preferiti (JSON in Application Support, segreti nel Keychain).
+/// Persistent state: connections and favorites (JSON in Application Support, secrets in the Keychain).
 @Observable
 @MainActor
 final class AppStore {
     var connections: [Connection] = []
     var favorites: [Favorite] = []
 
-    /// Bucket S3 o cartelle radice SFTP per connessione.
+    /// S3 buckets or SFTP root folders, per connection.
     var roots: [UUID: [RootEntry]] = [:]
     var rootErrors: [UUID: String] = [:]
     var loadingRoots: Set<UUID> = []
@@ -24,7 +24,7 @@ final class AppStore {
     }
 
     private static var fileURL: URL {
-        // CLOUDFERRYLITE_DATA_DIR: cartella dati alternativa (test), per non toccare quella reale.
+        // CLOUDFERRYLITE_DATA_DIR: alternative data folder (tests), so the real one is left untouched.
         let dir = ProcessInfo.processInfo.environment["CLOUDFERRYLITE_DATA_DIR"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("CloudFerryLite", isDirectory: true)
@@ -41,8 +41,8 @@ final class AppStore {
         seedFromEnvironment()
     }
 
-    /// Solo per test: CLOUDFERRYLITE_SEED_ENDPOINT/KEY/SECRET crea una connessione S3 all'avvio,
-    /// CLOUDFERRYLITE_SEED_SFTP="host:porta:utente:chiave" una connessione SFTP.
+    /// Tests only: CLOUDFERRYLITE_SEED_ENDPOINT/KEY/SECRET creates an S3 connection at launch,
+    /// CLOUDFERRYLITE_SEED_SFTP="host:port:user:key" an SFTP connection.
     private func seedFromEnvironment() {
         let env = ProcessInfo.processInfo.environment
         if let spec = env["CLOUDFERRYLITE_SEED_SFTP"], !connections.contains(where: { $0.kind == .sftp }) {
@@ -75,11 +75,11 @@ final class AppStore {
         try? enc.encode(p).write(to: Self.fileURL, options: .atomic)
     }
 
-    // MARK: Connessioni
+    // MARK: Connections
 
     func connection(_ id: UUID) -> Connection? { connections.first { $0.id == id } }
 
-    /// `secret`: nil = non modificare, "" = rimuovi (solo SFTP, dove è facoltativo).
+    /// `secret`: nil = leave unchanged, "" = remove (SFTP only, where it is optional).
     func upsert(_ conn: Connection, secret: String?) {
         if let secret {
             if secret.isEmpty { Keychain.deleteSecret(for: conn.id) } else { Keychain.setSecret(secret, for: conn.id) }
@@ -110,8 +110,8 @@ final class AppStore {
         credentialExpiry[id] = nil
     }
 
-    /// Backend pronto all'uso. Per AWS SSO rinnova le credenziali temporanee quando stanno per scadere
-    /// (e se serve avvia il login nel browser).
+    /// Backend ready to use. For AWS SSO it renews the temporary credentials when they are about to expire
+    /// (starting the browser sign-in if needed).
     func backend(for id: UUID) async throws -> any RemoteBackend {
         if let b = backends[id], !(credentialExpiry[id].map { $0.timeIntervalSinceNow < 300 } ?? false) { return b }
         guard let conn = connection(id) else { throw S3Error(status: 0, code: "NoConnection", message: String(localized: "Connection not found")) }
@@ -153,7 +153,7 @@ final class AppStore {
         }
     }
 
-    // MARK: Preferiti
+    // MARK: Favorites
 
     func favorite(for loc: BrowseLocation) -> Favorite? {
         favorites.first { $0.connectionID == loc.connectionID && $0.bucket == loc.bucket && $0.prefix == loc.prefix }
@@ -184,7 +184,7 @@ final class AppStore {
         save()
     }
 
-    /// Aggiorna i preferiti dopo lo spostamento/rinomina di una cartella.
+    /// Updates the favorites after a folder is moved or renamed.
     func favoritesMoved(connectionID: UUID, bucket: String, fromPrefix: String, toBucket: String, toPrefix: String) {
         var changed = false
         for i in favorites.indices where favorites[i].connectionID == connectionID && favorites[i].bucket == bucket

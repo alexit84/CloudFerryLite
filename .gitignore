@@ -5,7 +5,7 @@
 xcuserdata/
 DerivedData/
 
-# App bundle prodotto da build-app.sh
+# App bundle produced by build-app.sh
 dist/
 
 # macOS

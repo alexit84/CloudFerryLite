@@ -1,9 +1,9 @@
 import AppKit
 
-/// Modalità SSH_ASKPASS: ssh rilancia l'eseguibile dell'app con il prompt come argomento e legge la risposta da stdout.
-/// - password: dal Keychain della connessione (se c'è), altrimenti chiesta con un dialog;
-/// - passphrase della chiave: dal Keychain se salvata, altrimenti dialog;
-/// - conferma host key sconosciuta: dialog con l'impronta mostrata da ssh.
+/// SSH_ASKPASS mode: ssh relaunches the app executable with the prompt as argument and reads the answer from stdout.
+/// - password: from the connection's Keychain item (if any), otherwise asked with a dialog;
+/// - key passphrase: from the Keychain if saved, otherwise a dialog;
+/// - unknown host key confirmation: dialog with the fingerprint shown by ssh.
 enum AskPass {
     static let modeKey = "CLOUDFERRYLITE_ASKPASS"
     static let connectionKey = "CLOUDFERRYLITE_ASKPASS_CONNECTION"
@@ -24,7 +24,7 @@ enum AskPass {
             answer(ok ? "yes" : nil)
         }
         if lower.contains("passphrase") {
-            // Con autenticazione a chiave il segreto salvato è la passphrase.
+            // With key authentication the saved secret is the passphrase.
             if env[authKey] == SFTPAuthMethod.key.rawValue, let stored, !stored.isEmpty { answer(stored) }
             answer(ask(title: title, text: prompt, secure: true))
         }
@@ -32,7 +32,7 @@ enum AskPass {
             if env[authKey] == SFTPAuthMethod.password.rawValue, let stored, !stored.isEmpty { answer(stored) }
             answer(ask(title: title, text: prompt, secure: true))
         }
-        // Altri prompt keyboard-interactive (es. codice OTP).
+        // Other keyboard-interactive prompts (e.g. an OTP code).
         answer(ask(title: title, text: prompt, secure: false))
     }
 
@@ -48,7 +48,7 @@ enum AskPass {
         app.activate(ignoringOtherApps: true)
     }
 
-    /// Il dialog nasce da un processo in background: tienilo sopra le altre finestre.
+    /// The dialog comes from a background process: keep it above the other windows.
     private static func float(_ alert: NSAlert) {
         alert.window.level = .floating
         alert.window.orderFrontRegardless()

@@ -26,7 +26,7 @@ struct ContentView: View {
         }
         .onChange(of: selection) { _, item in open(item) }
         .onChange(of: store.connections.map(\.id)) { _, ids in
-            // Connessione eliminata mentre era aperta.
+            // Connection deleted while it was open.
             if let loc = browser.location, !ids.contains(loc.connectionID) {
                 browser.reset()
                 selection = nil
@@ -177,7 +177,7 @@ func copy(_ s: String) {
     NSPasteboard.general.setString(s, forType: .string)
 }
 
-/// Codice da confermare nel browser durante il login AWS SSO.
+/// Code to confirm in the browser during the AWS SSO sign-in.
 struct SSOPromptView: View {
     let prompt: SSOLoginPrompt
     @Environment(SSOService.self) private var sso

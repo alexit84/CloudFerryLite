@@ -17,7 +17,7 @@ struct BrowserView: View {
     @State private var renameText = ""
     @State private var pendingDelete: [RemoteItem] = []
     @State private var sharing: RemoteItem?
-    /// Spostamento in attesa di conferma perché la destinazione contiene già elementi con lo stesso nome.
+    /// Move waiting for confirmation because the destination already contains items with the same name.
     @State private var pendingReplace: PendingMove?
 
     private struct PendingMove {
@@ -107,13 +107,13 @@ struct BrowserView: View {
 
     private var connection: Connection? { model.location.flatMap { store.connection($0.connectionID) } }
 
-    // MARK: Contenuto
+    // MARK: Contents
 
     private var visibleItems: [RemoteItem] {
         var list = model.items
         if !search.isEmpty { list = list.filter { $0.name.localizedCaseInsensitiveContains(search) } }
         list.sort(using: sortOrder)
-        // Cartelle sempre in cima.
+        // Folders always on top.
         return list.filter(\.isFolder) + list.filter { !$0.isFolder }
     }
 
@@ -359,7 +359,7 @@ struct BrowserView: View {
         }
     }
 
-    // MARK: Azioni
+    // MARK: Actions
 
     private var selectedItems: [RemoteItem] { items(selection) }
 
@@ -388,7 +388,7 @@ struct BrowserView: View {
         model.open(BrowseLocation(connectionID: loc.connectionID, bucket: loc.bucket, prefix: folder.key), store: store)
     }
 
-    /// Esegue un'azione che richiede il backend, mostrando eventuali errori.
+    /// Runs an action that needs the backend, showing any error.
     private func withBackend(_ action: @escaping (any RemoteBackend, BrowseLocation) async throws -> Void) {
         guard let loc = model.location else { return }
         Task {
@@ -427,7 +427,7 @@ struct BrowserView: View {
         return urls
     }
 
-    /// ⌘V: file copiati nel Finder → upload; elementi tagliati qui → spostamento.
+    /// ⌘V: files copied in the Finder → upload; items cut here → move.
     private func paste(_ providers: [NSItemProvider]) async {
         let urls = await fileURLs(from: providers)
         if !urls.isEmpty { upload(urls); return }
@@ -450,7 +450,7 @@ struct BrowserView: View {
         withBackend { backend, loc in transfers.download(sel, from: loc, backend: backend, to: dest) }
     }
 
-    /// Scarica in una cartella temporanea (anteprima e trascinamento verso il Finder).
+    /// Downloads into a temporary folder (preview and drag to the Finder).
     private func fetchToTemp(_ item: RemoteItem, _ loc: BrowseLocation) async throws -> (URL, TransferItem) {
         let backend = try await store.backend(for: loc.connectionID)
         let dir = try TempFiles.newDirectory()
@@ -479,7 +479,7 @@ struct BrowserView: View {
         }
     }
 
-    /// Trascinamento verso il Finder (file promise AppKit): il download parte al rilascio.
+    /// Drag to the Finder (AppKit file promises): the download starts on drop.
     private func registerDragOut() {
         FilePromiseDrag.shared.install()
         FilePromiseDrag.shared.handler = .init(
@@ -525,7 +525,7 @@ struct BrowserView: View {
         }
     }
 
-    /// Sposta gli elementi tagliati nella cartella corrente.
+    /// Moves the cut items into the current folder.
     private func pasteCut() {
         guard let cut = model.cut, let dest = model.location else { return }
         guard cut.location.connectionID == dest.connectionID else {
@@ -536,7 +536,7 @@ struct BrowserView: View {
         for item in cut.items {
             let toKey = dest.prefix + item.name + (item.isFolder ? "/" : "")
             if cut.location.bucket == dest.bucket {
-                if item.key == toKey { continue } // stessa cartella
+                if item.key == toKey { continue } // same folder
                 if item.isFolder && dest.prefix.hasPrefix(item.key) {
                     actionError = String(localized: "You can't move \"\(item.name)\" into itself.")
                     return
@@ -546,7 +546,7 @@ struct BrowserView: View {
         }
         model.cut = nil
         guard !moves.isEmpty else { return }
-        // Nomi già presenti nella cartella di destinazione (quella mostrata).
+        // Names already present in the destination folder (the one shown).
         let existing = Set(model.items.map(\.name))
         let conflicts = moves.map(\.item.name).filter(existing.contains)
         if !conflicts.isEmpty {
@@ -600,7 +600,7 @@ struct BrowserView: View {
     }
 }
 
-/// Link presigned per condividere un oggetto S3 senza credenziali.
+/// Presigned link to share an S3 object without credentials.
 struct ShareLinkSheet: View {
     let item: RemoteItem
     let location: BrowseLocation

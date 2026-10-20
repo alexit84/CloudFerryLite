@@ -21,11 +21,11 @@ struct AWSCredentials: Sendable {
     var sessionToken: String?
     var expiration: Date?
 
-    /// Vero se scadono entro 5 minuti.
+    /// True if they expire within 5 minutes.
     var isExpiring: Bool { expiration.map { $0.timeIntervalSinceNow < 300 } ?? false }
 }
 
-/// Client S3 minimale con firma AWS Signature V4 (nessuna dipendenza esterna).
+/// Minimal S3 client with AWS Signature V4 signing (no external dependencies).
 final class S3Client: @unchecked Sendable {
     let connection: Connection
     let credentials: AWSCredentials
@@ -46,14 +46,14 @@ final class S3Client: @unchecked Sendable {
         self.session = URLSession(configuration: cfg)
     }
 
-    // MARK: - Operazioni
+    // MARK: - Operations
 
     func listBuckets() async throws -> [String] {
         let (data, _) = try await send("GET", bucket: nil)
         return XMLNode.parse(data).all("Bucket").compactMap { $0.value("Name") }
     }
 
-    /// Una pagina di ListObjectsV2.
+    /// One ListObjectsV2 page.
     struct ListPage {
         var items: [RemoteItem]
         var nextToken: String?
@@ -88,7 +88,7 @@ final class S3Client: @unchecked Sendable {
         return ListPage(items: items, nextToken: truncated ? root.value("NextContinuationToken") : nil)
     }
 
-    /// Elenca tutti gli oggetti sotto un prefisso, ricorsivamente.
+    /// Lists every object under a prefix, recursively.
     func listAll(bucket: String, prefix: String) async throws -> [RemoteItem] {
         var all: [RemoteItem] = []
         var token: String?
@@ -101,7 +101,7 @@ final class S3Client: @unchecked Sendable {
         return all
     }
 
-    /// CopyObject; sopra i 5 GB usa UploadPartCopy.
+    /// CopyObject; above 5 GB uses UploadPartCopy.
     func copyObject(fromBucket: String, key: String, size: Int64, toBucket: String, toKey: String) async throws {
         let source = "/" + fromBucket + "/" + key.s3PathEncoded
         let maxSingle: Int64 = 5 * 1024 * 1024 * 1024
@@ -140,7 +140,7 @@ final class S3Client: @unchecked Sendable {
         }
     }
 
-    /// URL presigned (query string SigV4) per scaricare un oggetto senza credenziali.
+    /// Presigned URL (SigV4 query string) to download an object without credentials.
     func presignedURL(bucket: String, key: String, expires: TimeInterval) -> URL {
         let req = makeRequest("GET", bucket: bucket, key: key, payloadHash: Self.unsignedPayload,
                               presignExpires: Int(min(expires, 604_800)))
@@ -155,7 +155,7 @@ final class S3Client: @unchecked Sendable {
         _ = try await send("DELETE", bucket: bucket, key: key)
     }
 
-    /// DeleteObjects a lotti da 1000.
+    /// DeleteObjects in batches of 1000.
     func deleteObjects(bucket: String, keys: [String]) async throws {
         for start in stride(from: 0, to: keys.count, by: 1000) {
             try Task.checkCancellation()
@@ -175,7 +175,7 @@ final class S3Client: @unchecked Sendable {
         }
     }
 
-    // MARK: - Request firmate per i trasferimenti (eseguite da TransferManager)
+    // MARK: - Signed requests for transfers (run by TransferManager)
 
     func downloadRequest(bucket: String, key: String) -> URLRequest {
         makeRequest("GET", bucket: bucket, key: key, payloadHash: Self.emptySHA256)
@@ -209,7 +209,7 @@ final class S3Client: @unchecked Sendable {
         xml += "</CompleteMultipartUpload>"
         let (data, _) = try await send("POST", bucket: bucket, key: key, query: [("uploadId", uploadID)],
                                        body: Data(xml.utf8), headers: ["Content-Type": "application/xml"])
-        // S3 può rispondere 200 con un <Error> nel body.
+        // S3 can answer 200 with an <Error> in the body.
         let root = XMLNode.parse(data)
         if root.name == "Error" {
             throw S3Error(status: 200, code: root.value("Code") ?? "", message: root.value("Message") ?? "")
@@ -220,13 +220,13 @@ final class S3Client: @unchecked Sendable {
         _ = try? await send("DELETE", bucket: bucket, key: key, query: [("uploadId", uploadID)])
     }
 
-    /// Verifica la risposta di un trasferimento e solleva l'errore S3 se presente.
+    /// Checks a transfer response and throws the S3 error if there is one.
     static func check(_ response: URLResponse, body: Data?) throws {
         guard let http = response as? HTTPURLResponse else { return }
         guard (200..<300).contains(http.statusCode) else { throw error(status: http.statusCode, data: body ?? Data()) }
     }
 
-    // MARK: - Trasporto
+    // MARK: - Transport
 
     private func region(for bucket: String?) -> String {
         guard let bucket else { return connection.region }
@@ -242,7 +242,7 @@ final class S3Client: @unchecked Sendable {
             let (data, resp) = try await session.data(for: req)
             guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             if (200..<300).contains(http.statusCode) { return (data, http) }
-            // Bucket in un'altra regione: memorizza la regione corretta e riprova una volta.
+            // Bucket in another region: remember the right region and retry once.
             if attempt == 0, let bucket, let actual = http.value(forHTTPHeaderField: "x-amz-bucket-region"),
                actual != region(for: bucket) {
                 lock.withLock { bucketRegions[bucket] = actual }
@@ -261,7 +261,7 @@ final class S3Client: @unchecked Sendable {
         return S3Error(status: status, code: code, message: msg)
     }
 
-    /// Costruisce e firma (SigV4) una richiesta. `payloadHash` è l'hash SHA-256 del body o UNSIGNED-PAYLOAD.
+    /// Builds and signs (SigV4) a request. `payloadHash` is the SHA-256 of the body or UNSIGNED-PAYLOAD.
     func makeRequest(_ method: String, bucket: String?, key: String? = nil, query: [(String, String)] = [],
                      payloadHash: String, headers: [String: String] = [:], presignExpires: Int? = nil) -> URLRequest {
         let region = region(for: bucket)
@@ -278,7 +278,7 @@ final class S3Client: @unchecked Sendable {
             if let port = comps?.port { hostPort += ":\(port)" }
         }
 
-        // Path-style se richiesto o se il nome del bucket non è DNS-compatibile (es. contiene punti su https).
+        // Path-style if requested or if the bucket name is not DNS-compatible (e.g. contains dots over https).
         var path = "/"
         if let bucket {
             let pathStyle = connection.usePathStyle || bucket.contains(".") || bucket.lowercased() != bucket
@@ -297,7 +297,7 @@ final class S3Client: @unchecked Sendable {
 
         var query = query
         if let presignExpires {
-            // Firma in query string: solo l'header host è firmato.
+            // Query string signature: only the host header is signed.
             query += [("X-Amz-Algorithm", "AWS4-HMAC-SHA256"),
                       ("X-Amz-Credential", "\(credentials.accessKeyID)/\(scope)"),
                       ("X-Amz-Date", amzDate),
@@ -353,7 +353,7 @@ final class S3Client: @unchecked Sendable {
     }
 }
 
-// MARK: - Utilità
+// MARK: - Utilities
 
 enum S3Date {
     static let amz: DateFormatter = {
@@ -390,7 +390,7 @@ extension String {
 
     var s3QueryEncoded: String { addingPercentEncoding(withAllowedCharacters: Self.unreserved) ?? self }
 
-    /// Codifica di path S3: tutto tranne i caratteri non riservati e "/".
+    /// S3 path encoding: everything except unreserved characters and "/".
     var s3PathEncoded: String {
         addingPercentEncoding(withAllowedCharacters: Self.unreserved.union(CharacterSet(charactersIn: "/"))) ?? self
     }
@@ -404,7 +404,7 @@ extension String {
     }
 }
 
-/// Albero XML minimale per leggere le risposte S3.
+/// Minimal XML tree to read S3 responses.
 final class XMLNode {
     let name: String
     var text = ""
@@ -415,7 +415,7 @@ final class XMLNode {
     func child(_ n: String) -> XMLNode? { children.first { $0.name == n } }
     func value(_ n: String) -> String? { child(n)?.text }
 
-    /// Tutti i discendenti con quel nome.
+    /// Every descendant with that name.
     func all(_ n: String) -> [XMLNode] {
         children.flatMap { ($0.name == n ? [$0] : []) + $0.all(n) }
     }

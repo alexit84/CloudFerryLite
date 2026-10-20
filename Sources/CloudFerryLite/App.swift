@@ -4,7 +4,7 @@ import SwiftUI
 @main
 enum Main {
     static func main() {
-        // ssh rilancia l'app come SSH_ASKPASS: rispondi al prompt ed esci senza aprire la UI.
+        // ssh relaunches the app as SSH_ASKPASS: answer the prompt and exit without opening the UI.
         if AskPass.isActive { AskPass.run() }
         CloudFerryLiteApp.main()
     }
@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in exit(await SelfTest.run()) }
             return
         }
-        // Solo fuori da un bundle .app (swift run): dentro un bundle ci pensa LaunchServices.
+        // Only outside an .app bundle (swift run): inside a bundle LaunchServices takes care of it.
         if Bundle.main.bundleIdentifier == nil {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -43,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Pulisce i file temporanei di anteprima e trascinamento.
+        // Remove the temporary preview and drag-and-drop files.
         try? FileManager.default.removeItem(at: TempFiles.root)
     }
 }

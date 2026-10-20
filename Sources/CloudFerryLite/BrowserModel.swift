@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Stato del browser remoto: posizione, cronologia, contenuto della cartella corrente, appunti "Taglia".
+/// Remote browser state: location, history, contents of the current folder, "Cut" clipboard.
 @Observable
 @MainActor
 final class BrowserModel {
@@ -10,7 +10,7 @@ final class BrowserModel {
     var isLoading = false
     var error: String?
 
-    /// Elementi tagliati (⌘X) in attesa di "Incolla" in un'altra cartella della stessa connessione.
+    /// Items cut (⌘X) waiting to be pasted into another folder of the same connection.
     var cut: (location: BrowseLocation, items: [RemoteItem])?
 
     private var back: [BrowseLocation] = []
@@ -71,7 +71,7 @@ final class BrowserModel {
                     let page = try await backend.listPage(bucket: loc.bucket, prefix: loc.prefix, token: token)
                     try Task.checkCancellation()
                     collected += page.items
-                    // Mostra progressivamente le pagine per i bucket grandi.
+                    // Show pages progressively for large buckets.
                     self.items = Self.dedup(collected)
                     token = page.nextToken
                 } while token != nil
@@ -83,7 +83,7 @@ final class BrowserModel {
         }
     }
 
-    /// Una cartella S3 può comparire sia come CommonPrefix sia come oggetto marker "nome/".
+    /// An S3 folder can appear both as a CommonPrefix and as a "name/" marker object.
     private static func dedup(_ items: [RemoteItem]) -> [RemoteItem] {
         var seen = Set<String>()
         return items.filter { seen.insert($0.key).inserted }

@@ -21,8 +21,8 @@ struct SFTPAttributes {
     var isSymlink: Bool { (permissions ?? 0) & 0o170000 == 0o120000 }
 }
 
-/// Client SFTP versione 3 che usa `/usr/bin/ssh -s sftp` come trasporto: valgono ~/.ssh/config,
-/// ssh-agent, known_hosts e ProxyJump. Password, passphrase e conferma della host key passano da SSH_ASKPASS.
+/// SFTP version 3 client using `/usr/bin/ssh -s sftp` as transport: ~/.ssh/config, ssh-agent,
+/// known_hosts and ProxyJump all apply. Password, passphrase and host key confirmation go through SSH_ASKPASS.
 final class SFTPSession: @unchecked Sendable {
     private let process = Process()
     private let input: FileHandle
@@ -32,12 +32,12 @@ final class SFTPSession: @unchecked Sendable {
     private var nextID: UInt32 = 1
     private var failure: Error?
     private var stderrText = ""
-    /// Estensioni annunciate dal server nel pacchetto VERSION (es. posix-rename@openssh.com).
+    /// Extensions announced by the server in the VERSION packet (e.g. posix-rename@openssh.com).
     private(set) var extensions: Set<String> = []
 
     var isAlive: Bool { lock.withLock { failure == nil } && process.isRunning }
 
-    // Tipi di pacchetto (draft-ietf-secsh-filexfer-02).
+    // Packet types (draft-ietf-secsh-filexfer-02).
     private enum T {
         static let initPacket: UInt8 = 1, version: UInt8 = 2, open: UInt8 = 3, close: UInt8 = 4, read: UInt8 = 5
         static let write: UInt8 = 6, lstat: UInt8 = 7, opendir: UInt8 = 11, readdir: UInt8 = 12, remove: UInt8 = 13
@@ -72,9 +72,9 @@ final class SFTPSession: @unchecked Sendable {
         }
         process.terminationHandler = { [weak self] p in
             guard let self else { return }
-            // Attende la fine dello stderr (es. "Permission denied") prima di riportare l'errore.
+            // Wait for the end of stderr (e.g. "Permission denied") before reporting the error.
             _ = stderrClosed.wait(timeout: .now() + 2)
-            // ssh termina le righe con \r\n (un solo Character in Swift): si divide per newline Unicode.
+            // ssh ends lines with \r\n (a single Character in Swift): split on Unicode newlines.
             let err = self.lock.withLock { self.stderrText }
                 .components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -85,7 +85,7 @@ final class SFTPSession: @unchecked Sendable {
         try process.run()
     }
 
-    /// Avvia ssh e completa l'handshake SFTP.
+    /// Starts ssh and completes the SFTP handshake.
     static func connect(_ conn: Connection, extraOptions: [String] = []) async throws -> SFTPSession {
         var args = ["-T", "-x",
                     "-o", "ServerAliveInterval=30", "-o", "ConnectTimeout=20",
@@ -131,7 +131,7 @@ final class SFTPSession: @unchecked Sendable {
 
     deinit { close() }
 
-    // MARK: Trasporto
+    // MARK: Transport
 
     private func fail(_ error: Error) {
         let waiting: [CheckedContinuation<(UInt8, Data), Error>] = lock.withLock {
@@ -191,7 +191,7 @@ final class SFTPSession: @unchecked Sendable {
         }
     }
 
-    /// Esegue una richiesta e verifica lo stato; restituisce tipo e payload della risposta.
+    /// Sends a request and checks the status; returns the response type and payload.
     private func request(_ type: UInt8, _ build: (inout Writer) -> Void) async throws -> (UInt8, Data) {
         var w = Writer()
         build(&w)
@@ -211,7 +211,7 @@ final class SFTPSession: @unchecked Sendable {
         return try r.bytes()
     }
 
-    // MARK: Operazioni
+    // MARK: Operations
 
     func realpath(_ path: String) async throws -> String {
         let resp = try await request(T.realpath) { $0.string(path) }
@@ -256,12 +256,12 @@ final class SFTPSession: @unchecked Sendable {
 
     var supportsPosixRename: Bool { extensions.contains("posix-rename@openssh.com") }
 
-    /// Rinomina sostituendo atomicamente la destinazione (estensione OpenSSH).
+    /// Renames, atomically replacing the destination (OpenSSH extension).
     func posixRename(_ from: String, _ to: String) async throws {
         _ = try await request(T.extended) { $0.string("posix-rename@openssh.com"); $0.string(from); $0.string(to) }
     }
 
-    /// Attributi del percorso senza seguire i link simbolici; nil se non esiste.
+    /// Attributes of the path without following symbolic links; nil if it does not exist.
     func lstat(_ path: String) async throws -> SFTPAttributes? {
         do {
             let resp = try await request(T.lstat) { $0.string(path) }
@@ -272,12 +272,12 @@ final class SFTPSession: @unchecked Sendable {
         }
     }
 
-    /// Crea un link simbolico. OpenSSH inverte l'ordine della specifica: prima la destinazione, poi il link.
+    /// Creates a symbolic link. OpenSSH swaps the order in the spec: target first, then the link.
     func symlink(target: String, link: String) async throws {
         _ = try await request(T.symlink) { $0.string(target); $0.string(link) }
     }
 
-    /// Scarica un file con richieste READ in parallelo (finestra di `window` blocchi).
+    /// Downloads a file with parallel READ requests (a window of `window` blocks).
     func download(_ path: String, to url: URL, progress: @escaping @Sendable (Int64) -> Void) async throws {
         let size = try await stat(path).size ?? 0
         let handle = try expectHandle(try await request(T.open) { $0.string(path); $0.u32(0x01); $0.u32(0) })
@@ -291,7 +291,7 @@ final class SFTPSession: @unchecked Sendable {
             try await TransferManager.forEachConcurrently(chunks, limit: Self.window) { start in
                 var offset = start
                 let end = min(start + Int64(Self.chunkSize), size)
-                // Il server può restituire meno byte del richiesto: rilegge il resto del blocco.
+                // The server may return fewer bytes than requested: read the rest of the block again.
                 while offset < end {
                     let len = UInt32(end - offset)
                     let resp: (UInt8, Data)
@@ -314,9 +314,9 @@ final class SFTPSession: @unchecked Sendable {
         _ = try await request(T.close) { $0.bytes(handle) }
     }
 
-    /// Carica un file con richieste WRITE in parallelo.
+    /// Uploads a file with parallel WRITE requests.
     func upload(_ url: URL, size: Int64, to path: String, progress: @escaping @Sendable (Int64) -> Void) async throws {
-        // WRITE | CREAT | TRUNC, permessi 0644.
+        // WRITE | CREAT | TRUNC, permissions 0644.
         let handle = try expectHandle(try await request(T.open) { $0.string(path); $0.u32(0x02 | 0x08 | 0x10); $0.u32(0x04); $0.u32(0o644) })
         let input = try FileHandle(forReadingFrom: url)
         defer { try? input.close() }
@@ -340,7 +340,7 @@ final class SFTPSession: @unchecked Sendable {
         _ = try await request(T.close) { $0.bytes(handle) }
     }
 
-    // MARK: Codifica
+    // MARK: Encoding
 
     struct Writer {
         var data = Data()
@@ -384,7 +384,7 @@ final class SFTPSession: @unchecked Sendable {
     }
 }
 
-/// Contatore di byte condiviso tra task paralleli.
+/// Byte counter shared by parallel tasks.
 final class ByteCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Int64 = 0

@@ -5,20 +5,20 @@ struct ListPage {
     var nextToken: String?
 }
 
-/// Operazioni comuni a S3 e SFTP. Per SFTP `bucket` è sempre "/" e le chiavi sono path senza "/" iniziale.
+/// Operations shared by S3 and SFTP. For SFTP `bucket` is always "/" and keys are paths without the leading "/".
 protocol RemoteBackend: AnyObject, Sendable {
     func roots() async throws -> [RootEntry]
-    /// Contenuto diretto di una cartella (una pagina).
+    /// Direct contents of a folder (one page).
     func listPage(bucket: String, prefix: String, token: String?) async throws -> ListPage
-    /// Tutto il contenuto sotto un prefisso, ricorsivamente; le cartelle hanno chiave che termina con "/".
+    /// Everything under a prefix, recursively; folders have keys ending with "/".
     func listAll(bucket: String, prefix: String) async throws -> [RemoteItem]
     func download(bucket: String, key: String, size: Int64, to url: URL, progress: @escaping @Sendable (Int64) -> Void) async throws
     func upload(file: URL, size: Int64, bucket: String, key: String, progress: @escaping @Sendable (Int64) -> Void) async throws
     func createFolder(bucket: String, key: String) async throws
-    /// Elimina file e cartelle (con tutto il contenuto).
+    /// Deletes files and folders (with all their contents).
     func delete(bucket: String, items: [RemoteItem]) async throws
-    /// Sposta o rinomina un file o una cartella; `toKey` per le cartelle termina con "/".
-    /// `replace`: sostituisce una destinazione esistente (altrimenti SFTP fallisce, S3 sovrascrive i file).
+    /// Moves or renames a file or folder; for folders `toKey` ends with "/".
+    /// `replace`: replaces an existing destination (otherwise SFTP fails and S3 overwrites the files).
     func move(bucket: String, item: RemoteItem, toBucket: String, toKey: String, replace: Bool,
               progress: @escaping @Sendable (Int64) -> Void) async throws
     func close()
@@ -77,7 +77,7 @@ final class S3Backend: RemoteBackend, @unchecked Sendable {
 
     private func multipartUpload(_ url: URL, size: Int64, key: String, bucket: String,
                                  progress: @escaping @Sendable (Int64) -> Void) async throws {
-        // Massimo 10.000 parti: parti da almeno 16 MB.
+        // At most 10,000 parts: parts of at least 16 MB.
         let partSize = max(Int64(16 * 1024 * 1024), (size + 9_999) / 10_000)
         let uploadID = try await client.createMultipartUpload(bucket: bucket, key: key, contentType: url.mimeType)
         do {
@@ -119,7 +119,7 @@ final class S3Backend: RemoteBackend, @unchecked Sendable {
             if item.isFolder {
                 keys += try await client.listAll(bucket: bucket, prefix: item.key).map(\.key)
             }
-            keys.append(item.key) // file, o marker della cartella
+            keys.append(item.key) // file, or folder marker
         }
         try await client.deleteObjects(bucket: bucket, keys: Array(Set(keys)))
     }
@@ -127,16 +127,16 @@ final class S3Backend: RemoteBackend, @unchecked Sendable {
     func move(bucket: String, item: RemoteItem, toBucket: String, toKey: String, replace: Bool,
               progress: @escaping @Sendable (Int64) -> Void) async throws {
         try MoveCheck.validate(item: item, fromBucket: bucket, toBucket: toBucket, toKey: toKey)
-        // Sostituire una cartella significa toglierne prima il contenuto, altrimenti resterebbero file vecchi.
+        // Replacing a folder means emptying it first, otherwise stale files would remain.
         if replace && item.isFolder {
             let old = try await client.listAll(bucket: toBucket, prefix: toKey).map(\.key)
             if !old.isEmpty { try await client.deleteObjects(bucket: toBucket, keys: old + [toKey]) }
         }
-        // S3 non ha rename: copia ogni oggetto e poi elimina gli originali.
+        // S3 has no rename: copy every object, then delete the originals.
         var objects: [(key: String, size: Int64)] = []
         if item.isFolder {
             objects = try await client.listAll(bucket: bucket, prefix: item.key).map { ($0.key, $0.size) }
-            // Cartella vuota senza marker: crea comunque la destinazione.
+            // Empty folder without a marker: create the destination anyway.
             if objects.isEmpty { try await client.createFolder(bucket: toBucket, key: toKey) }
         } else {
             objects = [(item.key, item.size)]
@@ -167,7 +167,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         self.extraOptions = extraOptions
     }
 
-    /// Sessione attiva, riconnettendo se ssh è terminato. Connessioni concorrenti condividono lo stesso avvio.
+    /// Active session, reconnecting if ssh has exited. Concurrent callers share the same connection attempt.
     func sftp() async throws -> SFTPSession {
         let task: Task<SFTPSession, Error> = lock.withLock {
             if let s = session, s.isAlive { return Task { s } }
@@ -208,7 +208,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         let home = try await s.realpath(".")
         out.append(RootEntry(name: String(localized: "Home"), bucket: "/", prefix: Self.key(fromPath: home, isFolder: true), systemImage: "house"))
         out.append(RootEntry(name: "/", bucket: "/", prefix: "", systemImage: "internaldrive"))
-        // Con home = "/" (es. server chroot) le radici coincidono: tieni la prima di ciascuna.
+        // With home = "/" (e.g. a chroot server) the roots coincide: keep the first of each.
         var seen = Set<String>()
         return out.filter { seen.insert($0.prefix).inserted }
     }
@@ -224,7 +224,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         for entry in try await s.listDirectory(dir) {
             var attrs = entry.attrs
             let link = attrs.isSymlink
-            // Per i link mostra tipo e dimensione della destinazione (se raggiungibile).
+            // For links, show the kind and size of the target (when reachable).
             if link, let target = try? await s.stat(dir + "/" + entry.name) { attrs = target }
             let folder = attrs.isDirectory
             items.append(RemoteItem(key: prefix + entry.name + (folder ? "/" : ""), name: entry.name, isFolder: folder,
@@ -233,12 +233,12 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         return items
     }
 
-    /// Download e copie: segue i link simbolici a cartelle, saltando quelli che riportano a cartelle già visitate.
+    /// Downloads and copies: follows symbolic links to folders, skipping those that lead back to folders already visited.
     func listAll(bucket: String, prefix: String) async throws -> [RemoteItem] {
         try await walk(prefix, followLinks: true)
     }
 
-    /// Visita ricorsiva. Con `followLinks` = false i link a cartelle sono restituiti come foglie (non si entra).
+    /// Recursive walk. With `followLinks` = false, links to folders are returned as leaves (not entered).
     private func walk(_ prefix: String, followLinks: Bool) async throws -> [RemoteItem] {
         let s = try await sftp()
         var out: [RemoteItem] = []
@@ -251,7 +251,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
                 guard item.isFolder else { out.append(item); continue }
                 if item.isSymlink {
                     guard followLinks else { out.append(item); continue }
-                    // Un link a una cartella antenata o già visitata genererebbe un ciclo: si salta.
+                    // A link to an ancestor or an already visited folder would create a loop: skip it.
                     guard let real = try? await s.realpath(Self.path(item.key)), !visited.contains(real) else { continue }
                     visited.insert(real)
                     out.append(item)
@@ -277,7 +277,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         try await s.upload(file, size: size, to: Self.path(key), progress: progress)
     }
 
-    /// Crea le cartelle intermedie mancanti (upload di cartelle).
+    /// Creates the missing intermediate folders (folder uploads).
     private func ensureParents(of key: String, session s: SFTPSession) async throws {
         let parts = key.split(separator: "/").dropLast()
         var path = ""
@@ -298,14 +298,14 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         for item in items { try await deleteTree(Self.path(item.key), session: s) }
     }
 
-    /// Elimina un percorso. I link simbolici vengono rimossi come link: il loro contenuto non viene mai toccato.
+    /// Deletes a path. Symbolic links are removed as links: their target is never touched.
     private func deleteTree(_ path: String, session s: SFTPSession) async throws {
         guard let attrs = try await s.lstat(path) else { return }
-        guard attrs.isDirectory else { try await s.remove(path); return } // file o link (anche a cartella)
+        guard attrs.isDirectory else { try await s.remove(path); return } // file or link (also to a folder)
         let key = Self.key(fromPath: path, isFolder: true)
         let all = try await walk(key, followLinks: false)
         for f in all where !f.isFolder || f.isSymlink { try await s.remove(Self.path(f.key)) }
-        // Cartelle reali dalla più profonda.
+        // Real folders, deepest first.
         for d in all.filter({ $0.isFolder && !$0.isSymlink }).sorted(by: { $0.key.count > $1.key.count }) {
             try await s.rmdir(Self.path(d.key))
         }
@@ -324,7 +324,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         guard replace else {
             throw SFTPError(code: 11, message: String(localized: "\"\((to as NSString).lastPathComponent)\" already exists at the destination"))
         }
-        // File su file: sostituzione atomica se il server la supporta.
+        // File over file: atomic replacement when the server supports it.
         if s.supportsPosixRename, !existing.isDirectory, !(item.isFolder && !item.isSymlink) {
             try await s.posixRename(from, to)
             return
@@ -333,7 +333,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
         try await s.rename(from, to)
     }
 
-    /// Solo per i test: crea un link simbolico.
+    /// Tests only: creates a symbolic link.
     func makeSymlink(target: String, linkKey: String) async throws {
         try await sftp().symlink(target: target, link: Self.path(linkKey))
     }
@@ -341,7 +341,7 @@ final class SFTPBackend: RemoteBackend, @unchecked Sendable {
     func close() { lock.withLock { session?.close(); session = nil } }
 }
 
-/// Controlli comuni prima di spostare/rinominare.
+/// Common checks before moving/renaming.
 enum MoveCheck {
     static func validate(item: RemoteItem, fromBucket: String, toBucket: String, toKey: String) throws {
         guard fromBucket == toBucket else { return }
@@ -350,18 +350,18 @@ enum MoveCheck {
         if item.isFolder && !item.isSymlink && dst.hasPrefix(src) && dst != src {
             throw S3Error(status: 0, code: "", message: String(localized: "You can't move \"\(item.name)\" into itself"))
         }
-        // Sostituire una cartella che contiene la sorgente cancellerebbe la sorgente stessa.
+        // Replacing a folder that contains the source would delete the source itself.
         if src.hasPrefix(dst) && src != dst {
             throw S3Error(status: 0, code: "", message: String(localized: "The destination contains \"\(item.name)\": choose another folder"))
         }
     }
 }
 
-/// Cartella per file temporanei (anteprime e trascinamenti verso il Finder), rimossa all'uscita.
+/// Folder for temporary files (previews and drags to the Finder), removed on quit.
 enum TempFiles {
     static let root = FileManager.default.temporaryDirectory.appendingPathComponent("CloudFerryLite", isDirectory: true)
 
-    /// Nuova cartella univoca che conterrà un file con il nome originale.
+    /// New unique folder that will hold a file with its original name.
     static func newDirectory() throws -> URL {
         let dir = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -3,7 +3,7 @@ import Observation
 import UniformTypeIdentifiers
 
 extension Notification.Name {
-    /// Inviata dopo upload, spostamenti ed eliminazioni; userInfo: "bucket", "connection".
+    /// Posted after uploads, moves and deletions; userInfo: "bucket", "connection".
     static let remoteContentChanged = Notification.Name("RemoteContentChanged")
 }
 
@@ -43,7 +43,7 @@ final class TransferItem: Identifiable {
     }
 
     func progress(_ file: String, _ bytes: Int64) {
-        // Un aggiornamento in ritardo non deve riaprire un file già completato.
+        // A late update must not reopen a file that is already complete.
         guard !finishedFiles.contains(file) else { return }
         bytesPerFile[file] = bytes
     }
@@ -68,7 +68,7 @@ final class TransferItem: Identifiable {
     }
 }
 
-/// Coda delle operazioni: massimo `maxConcurrent` elementi attivi, ognuno con parallelismo interno sui file.
+/// Operation queue: at most `maxConcurrent` active items, each with internal parallelism over its files.
 @Observable
 @MainActor
 final class TransferManager {
@@ -92,7 +92,7 @@ final class TransferManager {
         return item
     }
 
-    /// Attende la fine dell'operazione (usato dal trascinamento verso il Finder e dall'anteprima).
+    /// Waits for the operation to finish (used by drag to the Finder and by the preview).
     func wait(_ item: TransferItem) async throws {
         switch item.state {
         case .done: return
@@ -130,13 +130,13 @@ final class TransferManager {
 
     // MARK: Download
 
-    /// Scarica file e cartelle (ricorsivamente) nella cartella locale `destination`.
+    /// Downloads files and folders (recursively) into the local folder `destination`.
     @discardableResult
     func download(_ selection: [RemoteItem], from loc: BrowseLocation, backend: any RemoteBackend, to destination: URL,
                   title: String? = nil) -> TransferItem {
         let label = title ?? (selection.count == 1 ? selection[0].name + (selection[0].isFolder ? "/" : "") : String(localized: "\(selection.count) items"))
         return enqueue(TransferItem(kind: .download, title: label, detail: "→ \(destination.path)") { t in
-            // File da scaricare con il percorso relativo alla cartella corrente.
+            // Files to download, with their path relative to the current folder.
             var files: [(key: String, rel: String, size: Int64)] = []
             for item in selection {
                 if item.isFolder {
@@ -171,7 +171,7 @@ final class TransferManager {
 
     // MARK: Upload
 
-    /// Carica file e cartelle locali sotto la posizione corrente.
+    /// Uploads local files and folders under the current location.
     func upload(_ urls: [URL], to loc: BrowseLocation, backend: any RemoteBackend) {
         for url in urls {
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
@@ -207,9 +207,9 @@ final class TransferManager {
         }
     }
 
-    // MARK: Spostamento ed eliminazione
+    // MARK: Moves and deletions
 
-    /// Sposta (o rinomina) ogni elemento in `toKey(item)` dentro `toBucket`.
+    /// Moves (or renames) every item to `toKey(item)` inside `toBucket`.
     @discardableResult
     func move(_ selection: [(item: RemoteItem, toKey: String)], from loc: BrowseLocation, toBucket: String,
               backend: any RemoteBackend, title: String, replace: Bool = false, onMoved: @escaping @MainActor (RemoteItem, String) -> Void = { _, _ in }) -> TransferItem {
@@ -241,7 +241,7 @@ final class TransferManager {
         })
     }
 
-    /// Esegue `body` su ogni elemento con al massimo `limit` operazioni in parallelo.
+    /// Runs `body` on every item with at most `limit` operations in parallel.
     nonisolated static func forEachConcurrently<T: Sendable>(_ items: [T], limit: Int,
                                                              _ body: @escaping @Sendable (T) async throws -> Void) async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
@@ -257,7 +257,7 @@ final class TransferManager {
     }
 }
 
-/// Riporta i byte trasferiti osservando il task creato da URLSession.
+/// Reports the bytes transferred by observing the task created by URLSession.
 final class ProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let onProgress: (Int64) -> Void
     private var observation: NSKeyValueObservation?
@@ -277,7 +277,7 @@ final class ProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Senda
     }
 
     private func report(_ bytes: Int64) {
-        // Limita gli aggiornamenti della UI (ogni 256 KB circa).
+        // Throttle UI updates (roughly every 256 KB).
         guard bytes - lastReported >= 256 * 1024 || lastReported < 0 else { return }
         lastReported = bytes
         onProgress(bytes)

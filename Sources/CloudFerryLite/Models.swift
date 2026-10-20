@@ -9,23 +9,23 @@ enum S3AuthMethod: String, Codable, CaseIterable {
 }
 
 enum SFTPAuthMethod: String, Codable, CaseIterable {
-    /// Chiavi da ~/.ssh, ssh-agent o IdentityFile indicato.
+    /// Keys from ~/.ssh, ssh-agent or the given IdentityFile.
     case key
     case password
 }
 
-/// Una connessione salvata: S3 (AWS o compatibile) oppure SFTP via OpenSSH.
+/// A saved connection: S3 (AWS or compatible) or SFTP through OpenSSH.
 struct Connection: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var kind: ConnectionKind = .s3
 
     // MARK: S3
-    /// Vuoto = AWS S3 (s3.<region>.amazonaws.com). Altrimenti es. "https://minio.local:9000".
+    /// Empty = AWS S3 (s3.<region>.amazonaws.com). Otherwise e.g. "https://minio.local:9000".
     var endpoint: String = ""
     var region: String = "us-east-1"
     var usePathStyle: Bool = false
-    /// Se false le credenziali non hanno s3:ListAllMyBuckets: si usano i bucket indicati a mano.
+    /// If false the credentials lack s3:ListAllMyBuckets: the buckets typed by hand are used.
     var canListBuckets: Bool = true
     var manualBuckets: [String] = []
     var s3Auth: S3AuthMethod = .accessKey
@@ -36,13 +36,13 @@ struct Connection: Identifiable, Codable, Hashable {
     var ssoRoleName: String = ""
 
     // MARK: SFTP
-    /// Host o alias di ~/.ssh/config.
+    /// Host or ~/.ssh/config alias.
     var host: String = ""
     var port: Int?
     var username: String = ""
     var sftpAuth: SFTPAuthMethod = .key
     var identityFile: String = ""
-    /// Cartella iniziale; vuoto = home dell'utente.
+    /// Start folder; empty = the user's home.
     var startPath: String = ""
 
     static var defaultName: String { String(localized: "New connection") }
@@ -69,7 +69,7 @@ struct Connection: Identifiable, Codable, Hashable {
         kind == .s3 ? "externaldrive.connected.to.line.below" : "terminal"
     }
 
-    // Decodifica tollerante: le connessioni salvate dalla versione 1 non hanno i campi nuovi.
+    // Lenient decoding: connections saved by older versions lack the newer fields.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -95,7 +95,7 @@ struct Connection: Identifiable, Codable, Hashable {
     }
 }
 
-/// Un preferito: bucket o cartella (prefisso) di una connessione.
+/// A favorite: bucket or folder (prefix) of a connection.
 struct Favorite: Identifiable, Codable, Hashable {
     var id = UUID()
     var connectionID: UUID
@@ -104,7 +104,7 @@ struct Favorite: Identifiable, Codable, Hashable {
     var name: String
 }
 
-/// Punto di ingresso mostrato in sidebar: un bucket S3 o una cartella radice SFTP.
+/// Entry point shown in the sidebar: an S3 bucket or an SFTP root folder.
 struct RootEntry: Identifiable, Hashable {
     var name: String
     var bucket: String
@@ -113,7 +113,7 @@ struct RootEntry: Identifiable, Hashable {
     var id: String { bucket + "|" + prefix }
 }
 
-/// Elemento remoto. `key` è la chiave S3 o il path SFTP senza "/" iniziale; le cartelle terminano con "/".
+/// Remote item. `key` is the S3 key or the SFTP path without the leading "/"; folders end with "/".
 struct RemoteItem: Identifiable, Hashable, Sendable {
     var key: String
     var name: String
@@ -121,17 +121,17 @@ struct RemoteItem: Identifiable, Hashable, Sendable {
     var size: Int64 = 0
     var modified: Date?
     var storageClass: String?
-    /// Link simbolico (solo SFTP): `isFolder` indica il tipo della destinazione.
+    /// Symbolic link (SFTP only): `isFolder` tells the kind of the target.
     var isSymlink = false
 
     var id: String { key }
 
-    // Chiavi di ordinamento non opzionali per Table.
+    // Non-optional sort keys for Table.
     var sizeSort: Int64 { isFolder ? -1 : size }
     var modifiedSort: Date { modified ?? .distantPast }
     var kindSort: String { isFolder ? "" : (name as NSString).pathExtension.lowercased() }
 
-    /// Prefisso della cartella che contiene l'elemento.
+    /// Prefix of the folder that contains the item.
     var parentPrefix: String {
         let trimmed = isFolder ? String(key.dropLast()) : key
         guard let slash = trimmed.lastIndex(of: "/") else { return "" }
@@ -139,13 +139,13 @@ struct RemoteItem: Identifiable, Hashable, Sendable {
     }
 }
 
-/// Posizione corrente nel browser. Per SFTP `bucket` è sempre "/".
+/// Current location in the browser. For SFTP `bucket` is always "/".
 struct BrowseLocation: Hashable {
     var connectionID: UUID
     var bucket: String
     var prefix: String
 
-    /// Componenti del prefisso, es. "a/b/" -> ["a", "b"].
+    /// Prefix components, e.g. "a/b/" -> ["a", "b"].
     var segments: [String] { prefix.split(separator: "/").map(String.init) }
 
     var parent: BrowseLocation? {

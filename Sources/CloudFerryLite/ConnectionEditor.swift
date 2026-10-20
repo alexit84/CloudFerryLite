@@ -77,7 +77,7 @@ struct ConnectionEditor: View {
         Section {
             TextField("Endpoint", text: $connection.endpoint, prompt: Text("empty = AWS S3, e.g. https://minio.local:9000"))
                 .onChange(of: connection.endpoint) { old, new in
-                    // Gli S3 compatibili usano quasi sempre path-style.
+                    // S3-compatible services almost always use path-style.
                     if old.isEmpty && !new.isEmpty { connection.usePathStyle = true }
                 }
             TextField("Region", text: $connection.region, prompt: Text("us-east-1"))
@@ -177,7 +177,7 @@ struct ConnectionEditor: View {
         }
     }
 
-    // MARK: Logica
+    // MARK: Logic
 
     private var isValid: Bool {
         guard !connection.name.isEmpty else { return false }
@@ -275,7 +275,7 @@ struct ConnectionEditor: View {
         testing = true
         defer { testing = false }
         let c = normalized()
-        // Il test usa il segreto appena digitato senza salvarlo: per SFTP lo passa via Keychain temporaneo.
+        // The test uses the secret just typed without saving it: for SFTP it goes through a temporary Keychain item.
         var probe = c
         if c.kind == .sftp { probe.id = UUID() }
         let tempSecret = secret.isEmpty ? (clearSecret ? nil : Keychain.secret(for: c.id)) : secret

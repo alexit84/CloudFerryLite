@@ -1,20 +1,20 @@
 import AppKit
 import UniformTypeIdentifiers
 
-/// Trascinamento dalla tabella file verso il Finder con `NSFilePromiseProvider`.
+/// Dragging from the file table to the Finder with `NSFilePromiseProvider`.
 ///
-/// Il Finder accetta solo URL di file o "file promise" AppKit: i provider SwiftUI (`itemProvider`/`draggable`)
-/// pubblicano dati generici che il Finder ignora. Qui un monitor intercetta il mouseDown su una riga della
-/// tabella file; se segue un trascinamento avvia una NSDraggingSession con un promise per elemento, altrimenti
-/// restituisce l'evento alla tabella (clic, doppio clic e selezione restano invariati).
+/// The Finder only accepts file URLs or AppKit file promises: SwiftUI providers (`itemProvider`/`draggable`)
+/// publish generic data that the Finder ignores. Here a monitor intercepts mouseDown on a row of the
+/// file table; if a drag follows it starts an NSDraggingSession with one promise per item, otherwise
+/// it hands the event back to the table (click, double click and selection are unchanged).
 @MainActor
 final class FilePromiseDrag: NSObject, NSDraggingSource {
     static let shared = FilePromiseDrag()
 
     struct Handler {
-        /// Elementi da trascinare partendo dalla riga indicata (seleziona la riga se non lo era).
+        /// Items to drag starting from the given row (selects the row if it was not selected).
         var itemsForDrag: (_ row: Int) -> [RemoteItem]
-        /// Scarica l'elemento in una posizione temporanea e ne restituisce l'URL.
+        /// Downloads the item to a temporary location and returns its URL.
         var fetch: (_ item: RemoteItem) async throws -> URL
     }
 
@@ -26,7 +26,7 @@ final class FilePromiseDrag: NSObject, NSDraggingSource {
         return q
     }()
 
-    /// Dati del promise, letti dai callback sul queue del delegate.
+    /// Promise data, read by the callbacks on the delegate queue.
     private final class Promise: @unchecked Sendable {
         let item: RemoteItem
         let fetch: (RemoteItem) async throws -> URL
@@ -48,12 +48,12 @@ final class FilePromiseDrag: NSObject, NSDraggingSource {
               let hit = content.hitTest(frame.convert(event.locationInWindow, from: nil)) else { return event }
         var view: NSView? = hit
         while let v = view, !(v is NSTableView) { view = v.superview }
-        // La tabella file ha 4 colonne; la sidebar una sola.
+        // The file table has 4 columns; the sidebar only one.
         guard let table = view as? NSTableView, table.tableColumns.count >= 4 else { return event }
         let row = table.row(at: table.convert(event.locationInWindow, from: nil))
         guard row >= 0 else { return event }
 
-        // Clic o trascinamento? Si guarda avanti senza consumare il mouseUp.
+        // Click or drag? Look ahead without consuming the mouseUp.
         let start = event.locationInWindow
         while true {
             guard let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture,
@@ -88,7 +88,7 @@ final class FilePromiseDrag: NSObject, NSDraggingSource {
     // MARK: NSDraggingSource
 
     nonisolated func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        // Solo verso altre app (Finder): dentro l'app non ha senso "scaricare".
+        // Only towards other apps (Finder): "downloading" inside the app makes no sense.
         context == .outsideApplication ? .copy : []
     }
 }
