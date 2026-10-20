@@ -8,10 +8,19 @@ CloudFerryLite is written in SwiftUI with **no third-party dependencies**: S3 re
 built-in AWS Signature V4 implementation (CryptoKit), and SFTP speaks protocol version 3 directly over
 the system OpenSSH client (`/usr/bin/ssh -s sftp`), so your existing SSH setup just works.
 
-<!--
 ## Screenshots
-Coming soon: docs/screenshots/*.png
--->
+
+![Main window: favorites, S3 buckets, file table and the Activity panel](docs/screenshots/main-window.png)
+
+| SFTP browsing (symbolic links shown as such) | Connection editor |
+|---|---|
+| ![SFTP browser](docs/screenshots/sftp-browser.png) | ![SFTP connection editor](docs/screenshots/connection-editor.png) |
+
+| Quick Look preview (space bar) | Unknown host key confirmation |
+|---|---|
+| ![Quick Look](docs/screenshots/quick-look.png) | <img src="docs/screenshots/host-key-prompt.png" alt="Host key prompt" width="260"> |
+
+<sub>Screenshots use demo data served by local test servers.</sub>
 
 ## What it does
 
