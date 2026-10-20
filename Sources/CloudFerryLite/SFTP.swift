@@ -110,6 +110,7 @@ final class SFTPSession: @unchecked Sendable {
         env[AskPass.connectionKey] = conn.id.uuidString
         env[AskPass.authKey] = conn.sftpAuth.rawValue
         env[AskPass.titleKey] = conn.name
+        env[AskPass.languageKey] = Bundle.main.preferredLocalizations.first
 
         let s = try SFTPSession(arguments: args, environment: env)
         var w = Writer()

@@ -133,9 +133,9 @@ final class TransferManager {
     /// Downloads files and folders (recursively) into the local folder `destination`.
     @discardableResult
     func download(_ selection: [RemoteItem], from loc: BrowseLocation, backend: any RemoteBackend, to destination: URL,
-                  title: String? = nil) -> TransferItem {
+                  title: String? = nil, detail: String? = nil) -> TransferItem {
         let label = title ?? (selection.count == 1 ? selection[0].name + (selection[0].isFolder ? "/" : "") : String(localized: "\(selection.count) items"))
-        return enqueue(TransferItem(kind: .download, title: label, detail: "→ \(destination.path)") { t in
+        return enqueue(TransferItem(kind: .download, title: label, detail: detail ?? "→ \(destination.path)") { t in
             // Files to download, with their path relative to the current folder.
             var files: [(key: String, rel: String, size: Int64)] = []
             for item in selection {

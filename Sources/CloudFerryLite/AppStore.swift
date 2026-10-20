@@ -42,13 +42,13 @@ final class AppStore {
     }
 
     /// Tests only: CLOUDFERRYLITE_SEED_ENDPOINT/KEY/SECRET creates an S3 connection at launch,
-    /// CLOUDFERRYLITE_SEED_SFTP="host:port:user:key" an SFTP connection.
+    /// CLOUDFERRYLITE_SEED_SFTP="host:port:user:key" an SFTP connection; *_SEED_NAME / *_SEED_SFTP_NAME set their names.
     private func seedFromEnvironment() {
         let env = ProcessInfo.processInfo.environment
         if let spec = env["CLOUDFERRYLITE_SEED_SFTP"], !connections.contains(where: { $0.kind == .sftp }) {
             let p = spec.split(separator: ":", maxSplits: 3).map(String.init)
             if p.count == 4 {
-                var conn = Connection(name: "Seed SFTP \(p[0])", kind: .sftp)
+                var conn = Connection(name: env["CLOUDFERRYLITE_SEED_SFTP_NAME"] ?? "Seed SFTP \(p[0])", kind: .sftp)
                 conn.host = p[0]
                 conn.port = Int(p[1])
                 conn.username = p[2]
@@ -59,7 +59,7 @@ final class AppStore {
         }
         guard let ep = env["CLOUDFERRYLITE_SEED_ENDPOINT"], let key = env["CLOUDFERRYLITE_SEED_KEY"],
               let secret = env["CLOUDFERRYLITE_SEED_SECRET"], !connections.contains(where: { $0.endpoint == ep }) else { return }
-        var conn = Connection(name: "Seed \(ep)")
+        var conn = Connection(name: env["CLOUDFERRYLITE_SEED_NAME"] ?? "Seed \(ep)")
         conn.endpoint = ep
         conn.accessKeyID = key
         conn.usePathStyle = true

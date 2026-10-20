@@ -204,3 +204,4 @@
 "User" = "Utente";
 "You can't move \"%@\" into itself" = "Non puoi spostare \"%@\" dentro sé stessa";
 "You can't move \"%@\" into itself." = "Non puoi spostare \"%@\" dentro sé stessa.";
+"Temporary copy (Quick Look / drag)" = "Copia temporanea (anteprima / trascinamento)";

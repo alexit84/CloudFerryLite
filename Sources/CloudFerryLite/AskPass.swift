@@ -9,11 +9,17 @@ enum AskPass {
     static let connectionKey = "CLOUDFERRYLITE_ASKPASS_CONNECTION"
     static let authKey = "CLOUDFERRYLITE_ASKPASS_AUTH"
     static let titleKey = "CLOUDFERRYLITE_ASKPASS_TITLE"
+    /// Language of the app that launched ssh, so the dialogs match it.
+    static let languageKey = "CLOUDFERRYLITE_ASKPASS_LANGUAGE"
 
     static var isActive: Bool { ProcessInfo.processInfo.environment[modeKey] == "1" }
 
     static func run() -> Never {
         let env = ProcessInfo.processInfo.environment
+        // Volatile argument domain: affects only this helper process, nothing is persisted.
+        if let lang = env[languageKey] {
+            UserDefaults.standard.setVolatileDomain(["AppleLanguages": [lang]], forName: UserDefaults.argumentDomain)
+        }
         let prompt = CommandLine.arguments.dropFirst().joined(separator: " ")
         let title = env[titleKey] ?? "CloudFerryLite"
         let lower = prompt.lowercased()

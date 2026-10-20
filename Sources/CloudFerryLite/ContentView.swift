@@ -62,7 +62,7 @@ struct ContentView: View {
                     Label {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(fav.name)
-                            Text("\(store.connection(fav.connectionID)?.name ?? "?") · \(fav.bucket)/\(fav.prefix)")
+                            Text("\(store.connection(fav.connectionID)?.name ?? "?") · \(fav.bucket == "/" ? "" : fav.bucket)/\(fav.prefix)")
                                 .font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         }
                     } icon: {

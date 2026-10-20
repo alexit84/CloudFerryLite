@@ -454,7 +454,8 @@ struct BrowserView: View {
     private func fetchToTemp(_ item: RemoteItem, _ loc: BrowseLocation) async throws -> (URL, TransferItem) {
         let backend = try await store.backend(for: loc.connectionID)
         let dir = try TempFiles.newDirectory()
-        let t = transfers.download([item], from: loc, backend: backend, to: dir)
+        let t = transfers.download([item], from: loc, backend: backend, to: dir,
+                                   detail: String(localized: "Temporary copy (Quick Look / drag)"))
         return (dir.appendingPathComponent(item.name), t)
     }
 
