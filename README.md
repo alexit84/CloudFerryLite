@@ -85,7 +85,7 @@ English and Italian; the app follows the system language.
 ## Build and run
 
 ```bash
-git clone https://github.com/<your-account>/CloudFerryLite.git
+git clone https://github.com/alexit84/CloudFerryLite.git
 cd CloudFerryLite
 ./build-app.sh
 open dist/CloudFerryLite.app
